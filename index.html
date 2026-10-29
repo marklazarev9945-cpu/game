@@ -1,627 +1,166 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neon Tokyo Runner</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
-        body { overflow: hidden; background: #0a0a23; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
-        
-        .ui-layer { position: absolute; z-index: 10; pointer-events: none; width: 100%; height: 100%; }
-        
-        .hud { 
-            display: flex; justify-content: space-between; align-items: flex-start; 
-            padding: 20px; width: 100%; 
-        }
-        .hud-item { 
-            background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(8px); 
-            padding: 12px 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.2);
-            color: #fff; font-weight: 800; font-size: 1.2rem; text-shadow: 0 0 10px rgba(255,0,255,0.8);
-            display: flex; align-items: center; gap: 10px;
-        }
-        .coin-icon { width: 20px; height: 20px; background: #ffd700; border-radius: 50%; box-shadow: 0 0 10px #ffd700; display: inline-block; }
-        
-        .overlay { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            display: flex; flex-direction: column; align-items: center; justify-content: center; 
-            background: linear-gradient(135deg, rgba(255, 165, 0, 0.2), rgba(255, 69, 0, 0.15)); 
-            backdrop-filter: blur(12px); pointer-events: auto; transition: opacity 0.4s ease;
-        }
-        .overlay.hidden { opacity: 0; pointer-events: none; }
-        
-        h1 { 
-            font-size: 5rem; font-weight: 900; color: #fff; letter-spacing: -2px;
-            text-shadow: 0 0 20px #ff00ff, 0 0 40px #00ffff, 0 0 60px #ff00ff; 
-            margin-bottom: 10px; text-align: center;
-        }
-        .subtitle { font-size: 1.5rem; color: #fff; margin-bottom: 30px; font-weight: 600; text-shadow: 0 0 10px rgba(0,0,0,0.8); }
-        .blink { 
-            animation: blink 1.2s infinite ease-in-out; color: #fff; font-size: 1.4rem; font-weight: 700; 
-            text-shadow: 0 0 15px #ffaa00; margin-top: 20px;
-        }
-        @keyframes blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.98); } }
-        
-        #loading-screen { background: #0a0a23; z-index: 100; }
-        .spinner { 
-            border: 4px solid rgba(255,255,255,0.1); border-left-color: #ff00ff; border-radius: 50%; 
-            width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; 
-            box-shadow: 0 0 15px #ff00ff;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .stats { font-size: 2rem; color: #fff; font-weight: 800; margin: 10px 0; text-shadow: 0 0 10px #ff00ff; }
-    </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Neon Tokyo Runner</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#09091b;font-family:Arial,sans-serif;touch-action:none;color:white}
+#game{position:fixed;inset:0}canvas{display:block}
+#hud{position:fixed;z-index:3;top:12px;left:12px;right:12px;display:none;justify-content:space-between;gap:7px;pointer-events:none}
+.pill{padding:10px 12px;border:1px solid #ffffff40;background:#111831b8;border-radius:12px;font-weight:bold;font-size:clamp(12px,3vw,19px);text-shadow:0 0 8px #ff00ff}
+.screen{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;background:#09091bc9;backdrop-filter:blur(8px)}
+.hidden{display:none!important}h1{font-size:clamp(42px,10vw,90px);margin:0 0 12px;text-shadow:0 0 18px #ff00ff,0 0 30px #00ffff}
+p{font-size:clamp(16px,4vw,23px);line-height:1.5}button{background:linear-gradient(100deg,#f000bd,#00bfff);border:0;border-radius:15px;padding:15px 34px;color:white;font-size:22px;font-weight:900;cursor:pointer}
+#status{font-size:13px;color:#ddd;margin-top:14px;max-width:90vw;overflow-wrap:anywhere}
+</style>
 </head>
 <body>
-
-<div id="canvas-container"></div>
-
-<div class="ui-layer">
-    <div class="hud" id="hud" style="display: none;">
-        <div class="hud-item">SCORE: <span id="score-display">0</span></div>
-        <div class="hud-item"><span class="coin-icon"></span> <span id="coin-display">0</span></div>
-        <div class="hud-item"><span id="speed-display">0</span> KM/H</div>
-    </div>
-
-    <div class="overlay" id="loading-screen">
-        <div class="spinner"></div>
-        <div style="color: #fff; font-weight: 600; letter-spacing: 2px;">ЗАГРУЗКА НЕОНОВОГО ГОРОДА...</div>
-    </div>
-
-    <div class="overlay hidden" id="start-screen">
-        <h1>CITY RUSH</h1>
-        <div class="subtitle">НЕОНОВЫЙ ТОКИО</div>
-        <div class="blink">Нажми ПРОБЕЛ или тапни для старта</div>
-    </div>
-
-    <div class="overlay hidden" id="gameover-screen">
-        <h1>GAME OVER</h1>
-        <div class="stats">Счет: <span id="final-score">0</span></div>
-        <div class="stats">Монеты: <span id="final-coins">0</span></div>
-        <div class="blink">Нажми ПРОБЕЛ или тапни для рестарта</div>
-    </div>
-</div>
-
-<script type="module">
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
-
-// --- Глобальные переменные ---
-let scene, camera, renderer, clock;
-let player, mixer, playerBaseY = 0;
-let gameState = 'loading'; // loading, start, playing, gameover
-let speed = 15; // нач. скорость
-const maxSpeed = 40;
-const acceleration = 0.5;
-let score = 0;
-let coins = 0;
-let distance = 0;
-
-// Управление
-let targetLane = 0; // -1, 0, 1
-const laneWidth = 3.5;
-let isJumping = false;
-let velocityY = 0;
-const gravity = -30;
-const jumpForce = 12;
-
-// Объекты
-const obstacles = [];
-const coinObjects = [];
-const particles = [];
-const environment = [];
-let lastSpawnZ = 0;
-const spawnDistance = 40;
-
-// Ввод
-let touchStartX = 0, touchStartY = 0;
-
-// --- Инициализация ---
-function init() {
-    const container = document.getElementById('canvas-container');
-    
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a23);
-    scene.fog = new THREE.Fog(0x0a0a23, 20, 70);
-
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 4, 6);
-
-    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    container.appendChild(renderer.domElement);
-
-    clock = new THREE.Clock();
-
-    // Освещение
-    const hemiLight = new THREE.HemisphereLight(0x4444ff, 0x000000, 0.6);
-    scene.add(hemiLight);
-
-    const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0x0088ff, 1.5);
-    dirLight.position.set(5, 10, 5);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 50;
-    dirLight.shadow.camera.left = -15;
-    dirLight.shadow.camera.right = 15;
-    dirLight.shadow.camera.top = 15;
-    dirLight.shadow.camera.bottom = -15;
-    scene.add(dirLight);
-
-    // Загрузка игрока
-    loadPlayer().then(() => {
-        createInitialEnvironment();
-        document.getElementById('loading-screen').classList.add('hidden');
-        document.getElementById('start-screen').classList.remove('hidden');
-        gameState = 'start';
-        animate();
-    });
-
-    // События
-    window.addEventListener('resize', onWindowResize);
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('touchstart', onTouchStart, { passive: false });
-    document.addEventListener('touchend', onTouchEnd, { passive: false });
-}
-
-// --- Загрузка игрока ---
-function loadPlayer() {
-    return new Promise((resolve) => {
-        const loader = new GLTFLoader();
-        loader.load(
-            'player_game.glb',
-            (gltf) => {
-                player = gltf.scene;
-                player.traverse((child) => {
-                    if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-                    }
-                });
-
-                // Масштабирование до высоты ~2.0
-                const box = new THREE.Box3().setFromObject(player);
-                const size = box.getSize(new THREE.Vector3());
-                const scale = 2.0 / size.y;
-                player.scale.setScalar(scale);
-
-                // Пересчет bounding box после масштабирования
-                const scaledBox = new THREE.Box3().setFromObject(player);
-                playerBaseY = -scaledBox.min.y;
-                
-                player.position.y = playerBaseY;
-                player.rotation.y = Math.PI; // Лицом вперед (-Z)
-
-                scene.add(player);
-
-                // Анимация
-                if (gltf.animations && gltf.animations.length > 0) {
-                    mixer = new THREE.AnimationMixer(player);
-                    const clip = gltf.animations.find(a => a.name.toLowerCase().includes('run') || a.name.toLowerCase().includes('walk')) || gltf.animations[0];
-                    const action = mixer.clipAction(clip);
-                    action.play();
-                }
-                resolve();
-            },
-            undefined,
-            (error) => {
-                console.warn('Модель не найдена, используем fallback капсулу', error);
-                const geo = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
-                const mat = new THREE.MeshStandardMaterial({ 
-                    color: 0x00ffff, emissive: 0x0044aa, emissiveIntensity: 0.5, roughness: 0.2, metalness: 0.8 
-                });
-                player = new THREE.Mesh(geo, mat);
-                player.castShadow = true;
-                player.receiveShadow = true;
-                playerBaseY = 1.0; // radius 0.5 + half height 0.5
-                player.position.y = playerBaseY;
-                player.rotation.y = Math.PI;
-                scene.add(player);
-                resolve();
-            }
-        );
-    });
-}
-
-// --- Окружение ---
-function createRoadSegment(zPos) {
-    const group = new THREE.Group();
-    group.position.z = zPos;
-
-    // Асфальт
-    const roadGeo = new THREE.PlaneGeometry(12, 20);
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.1, metalness: 0.6 });
-    const road = new THREE.Mesh(roadGeo, roadMat);
-    road.rotation.x = -Math.PI / 2;
-    road.receiveShadow = true;
-    group.add(road);
-
-    // Неоновые пунктиры
-    const dashGeo = new THREE.PlaneGeometry(0.15, 2);
-    const dashMat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-    for (let i = -9; i < 10; i += 4) {
-        const dash1 = new THREE.Mesh(dashGeo, dashMat);
-        dash1.rotation.x = -Math.PI / 2;
-        dash1.position.set(-1.75, 0.02, i);
-        group.add(dash1);
-
-        const dash2 = new THREE.Mesh(dashGeo, dashMat);
-        dash2.rotation.x = -Math.PI / 2;
-        dash2.position.set(1.75, 0.02, i);
-        group.add(dash2);
-    }
-
-    // Бордюры
-    const curbGeo = new THREE.BoxGeometry(0.5, 0.3, 20);
-    const curbMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
-    const leftCurb = new THREE.Mesh(curbGeo, curbMat);
-    leftCurb.position.set(-6.25, 0.15, 0);
-    leftCurb.receiveShadow = true;
-    group.add(leftCurb);
-
-    const rightCurb = new THREE.Mesh(curbGeo, curbMat);
-    rightCurb.position.set(6.25, 0.15, 0);
-    rightCurb.receiveShadow = true;
-    group.add(rightCurb);
-
-    // Здания и декор
-    const buildingColors = [0xff00ff, 0x00ffff, 0x9900ff];
-    for (let side of [-1, 1]) {
-        const width = 4 + Math.random() * 6;
-        const height = 10 + Math.random() * 25;
-        const depth = 4 + Math.random() * 6;
-        const bGeo = new THREE.BoxGeometry(width, height, depth);
-        const bMat = new THREE.MeshStandardMaterial({ color: 0x111116, roughness: 0.8 });
-        const building = new THREE.Mesh(bGeo, bMat);
-        building.position.set(side * (8 + width/2), height/2, 0);
-        building.castShadow = true;
-        building.receiveShadow = true;
-        group.add(building);
-
-        // Неоновая вывеска
-        const signGeo = new THREE.BoxGeometry(0.2, height * 0.6, 0.2);
-        const signColor = buildingColors[Math.floor(Math.random() * buildingColors.length)];
-        const signMat = new THREE.MeshBasicMaterial({ color: signColor });
-        const sign = new THREE.Mesh(signGeo, signMat);
-        sign.position.set(side * (8 + width/2 + 0.1), height * 0.6, 0);
-        group.add(sign);
-
-        // Фонарь/столб
-        if (Math.random() > 0.5) {
-            const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, 4);
-            const poleMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-            const pole = new THREE.Mesh(poleGeo, poleMat);
-            pole.position.set(side * 7.5, 2, 0);
-            group.add(pole);
-            
-            const lightGeo = new THREE.SphereGeometry(0.3);
-            const lightMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-            const light = new THREE.Mesh(lightGeo, lightMat);
-            light.position.set(side * 7.5, 4, 0);
-            group.add(light);
-        }
-    }
-
-    scene.add(group);
-    environment.push(group);
-}
-
-function createInitialEnvironment() {
-    for (let i = 0; i < 6; i++) {
-        createRoadSegment(-i * 20);
-    }
-    lastSpawnZ = -100;
-}
-
-function spawnObstacleAndCoins(zPos) {
-    const lane = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
-    const xPos = lane * laneWidth;
-    const type = Math.random() > 0.5 ? 'low' : 'high';
-    
-    const obsGeo = new THREE.BoxGeometry(2.5, type === 'low' ? 0.8 : 2.5, 0.5);
-    const obsMat = new THREE.MeshStandardMaterial({ 
-        color: 0xff0055, emissive: 0xaa0033, emissiveIntensity: 0.8, roughness: 0.2, metalness: 0.5 
-    });
-    const obs = new THREE.Mesh(obsGeo, obsMat);
-    obs.position.set(xPos, type === 'low' ? 0.4 : 1.25, zPos);
-    obs.castShadow = true;
-    obs.receiveShadow = true;
-    obs.userData = { type: 'obstacle', hit: false };
-    scene.add(obs);
-    obstacles.push(obs);
-
-    // Монетки в других полосах
-    for (let i = -1; i <= 1; i++) {
-        if (i !== lane) {
-            const coinGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 16);
-            const coinMat = new THREE.MeshStandardMaterial({ 
-                color: 0x9900ff, emissive: 0x4400aa, emissiveIntensity: 0.6, metalness: 0.9, roughness: 0.1 
-            });
-            const coin = new THREE.Mesh(coinGeo, coinMat);
-            coin.rotation.x = Math.PI / 2;
-            coin.rotation.z = Math.PI / 2; // Лицом к игроку
-            coin.position.set(i * laneWidth, 1.0, zPos);
-            coin.castShadow = true;
-            coin.userData = { type: 'coin', collected: false };
-            scene.add(coin);
-            coinObjects.push(coin);
-        }
-    }
-}
-
-function createExplosion(position) {
-    for (let i = 0; i < 25; i++) {
-        const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-        const mat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.copy(position);
-        
-        const velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 10,
-            Math.random() * 10 + 5,
-            (Math.random() - 0.5) * 10
-        );
-        
-        scene.add(mesh);
-        particles.push({ mesh, velocity, life: 1.0 });
-    }
-}
-
-// --- Логика игры ---
-function update(delta) {
-    if (gameState !== 'playing') return;
-
-    // Увеличение скорости
-    speed = Math.min(maxSpeed, speed + acceleration * delta);
-    distance += speed * delta;
-    score = Math.floor(distance + coins * 50);
-
-    // Движение игрока вперед (по -Z)
-    player.position.z -= speed * delta;
-
-    // Плавное перемещение по полосам
-    const targetX = targetLane * laneWidth;
-    const diffX = targetX - player.position.x;
-    player.position.x += diffX * 10 * delta;
-    player.rotation.z = THREE.MathUtils.lerp(player.rotation.z, -diffX * 0.15, 10 * delta);
-
-    // Прыжок
-    if (isJumping) {
-        velocityY += gravity * delta;
-        player.position.y += velocityY * delta;
-        if (player.position.y <= playerBaseY) {
-            player.position.y = playerBaseY;
-            isJumping = false;
-            velocityY = 0;
-        }
-    }
-
-    // Анимация
-    if (mixer) mixer.update(delta);
-
-    // Камера
-    const camTargetX = player.position.x * 0.4;
-    const camTargetY = player.position.y + 3.5;
-    const camTargetZ = player.position.z + 7;
-    camera.position.x += (camTargetX - camera.position.x) * 5 * delta;
-    camera.position.y += (camTargetY - camera.position.y) * 5 * delta;
-    camera.position.z += (camTargetZ - camera.position.z) * 5 * delta;
-    camera.lookAt(player.position.x * 0.2, player.position.y + 1, player.position.z - 5);
-
-    // Генерация мира
-    if (player.position.z - lastSpawnZ < spawnDistance) {
-        lastSpawnZ -= 20;
-        createRoadSegment(lastSpawnZ);
-        spawnObstacleAndCoins(lastSpawnZ - 10);
-    }
-
-    // Очистка старого окружения
-    for (let i = environment.length - 1; i >= 0; i--) {
-        if (environment[i].position.z > player.position.z + 15) {
-            scene.remove(environment[i]);
-            environment.splice(i, 1);
-        }
-    }
-
-    // Обновление препятствий и коллизии
-    const playerBox = new THREE.Box3().setFromObject(player);
-    // Уменьшим хитбокс игрока для честности
-    playerBox.expandByScalar(-0.3);
-
-    for (let i = obstacles.length - 1; i >= 0; i--) {
-        const obs = obstacles[i];
-        if (obs.position.z > player.position.z + 10) {
-            scene.remove(obs);
-            obstacles.splice(i, 1);
-            continue;
-        }
-
-        if (!obs.userData.hit) {
-            const obsBox = new THREE.Box3().setFromObject(obs);
-            if (playerBox.intersectsBox(obsBox)) {
-                obs.userData.hit = true;
-                gameOver();
-            }
-        }
-    }
-
-    // Обновление монет
-    for (let i = coinObjects.length - 1; i >= 0; i--) {
-        const coin = coinObjects[i];
-        coin.rotation.y += 3 * delta; // Вращение
-        
-        if (coin.position.z > player.position.z + 10) {
-            scene.remove(coin);
-            coinObjects.splice(i, 1);
-            continue;
-        }
-
-        if (!coin.userData.collected) {
-            const coinBox = new THREE.Box3().setFromObject(coin);
-            if (playerBox.intersectsBox(coinBox)) {
-                coin.userData.collected = true;
-                coins++;
-                scene.remove(coin);
-                coinObjects.splice(i, 1);
-            }
-        }
-    }
-
-    // Частицы
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.velocity.y += gravity * delta;
-        p.mesh.position.addScaledVector(p.velocity, delta);
-        p.life -= delta * 1.5;
-        p.mesh.scale.setScalar(p.life);
-        p.mesh.rotation.x += delta * 5;
-        p.mesh.rotation.y += delta * 5;
-        
-        if (p.life <= 0) {
-            scene.remove(p.mesh);
-            p.mesh.geometry.dispose();
-            p.mesh.material.dispose();
-            particles.splice(i, 1);
-        }
-    }
-
-    // UI обновление
-    document.getElementById('score-display').textContent = score;
-    document.getElementById('coin-display').textContent = coins;
-    document.getElementById('speed-display').textContent = Math.floor(speed * 3.6); // m/s to km/h
-}
-
-function gameOver() {
-    gameState = 'gameover';
-    createExplosion(player.position);
-    
-    // Скрыть игрока или оставить, но остановить
-    player.visible = false;
-    
-    document.getElementById('hud').style.display = 'none';
-    document.getElementById('final-score').textContent = score;
-    document.getElementById('final-coins').textContent = coins;
-    document.getElementById('gameover-screen').classList.remove('hidden');
-}
-
-function resetGame() {
-    // Очистка сцены от динамических объектов
-    obstacles.forEach(o => scene.remove(o));
-    obstacles.length = 0;
-    coinObjects.forEach(c => scene.remove(c));
-    coinObjects.length = 0;
-    environment.forEach(e => scene.remove(e));
-    environment.length = 0;
-    particles.forEach(p => { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
-    particles.length = 0;
-
-    // Сброс переменных
-    speed = 15;
-    score = 0;
-    coins = 0;
-    distance = 0;
-    targetLane = 0;
-    isJumping = false;
-    velocityY = 0;
-
-    // Сброс игрока
-    player.position.set(0, playerBaseY, 0);
-    player.rotation.set(0, Math.PI, 0);
-    player.visible = true;
-
-    createInitialEnvironment();
-    
-    document.getElementById('gameover-screen').classList.add('hidden');
-    document.getElementById('start-screen').classList.add('hidden');
-    document.getElementById('hud').style.display = 'flex';
-    gameState = 'playing';
-}
-
-// --- Управление ---
-function onKeyDown(e) {
-    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
-        e.preventDefault();
-        if (gameState === 'start' || gameState === 'gameover') {
-            resetGame();
-        } else if (gameState === 'playing' && !isJumping) {
-            isJumping = true;
-            velocityY = jumpForce;
-        }
-    }
-    if (gameState === 'playing') {
-        if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
-            targetLane = Math.max(-1, targetLane - 1);
-        }
-        if (e.code === 'ArrowRight' || e.code === 'KeyD') {
-            targetLane = Math.min(1, targetLane + 1);
-        }
-    }
-}
-
-function onTouchStart(e) {
-    touchStartX = e.changedTouches[0].screenX;
-    touchStartY = e.changedTouches[0].screenY;
-}
-
-function onTouchEnd(e) {
-    e.preventDefault();
-    const touchEndX = e.changedTouches[0].screenX;
-    const touchEndY = e.changedTouches[0].screenY;
-    
-    const dx = touchEndX - touchStartX;
-    const dy = touchEndY - touchStartY;
-    
-    if (gameState === 'start' || gameState === 'gameover') {
-        resetGame();
-        return;
-    }
-    
-    if (gameState === 'playing') {
-        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-            // Горизонтальный свайп
-            if (dx > 0) targetLane = Math.min(1, targetLane + 1);
-            else targetLane = Math.max(-1, targetLane - 1);
-        } else if (dy < -30 && !isJumping) {
-            // Свайп вверх
-            isJumping = true;
-            velocityY = jumpForce;
-        } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-            // Тап (можно использовать для прыжка)
-            if (!isJumping) {
-                isJumping = true;
-                velocityY = jumpForce;
-            }
-        }
-    }
-}
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    const delta = Math.min(clock.getDelta(), 0.1);
-    update(delta);
-    renderer.render(scene, camera);
-}
-
-// Запуск
-init();
+<div id="game"></div>
+<div id="hud"><div class="pill">SCORE <span id="score">0</span></div><div class="pill">🟡 <span id="coins">0</span></div><div class="pill"><span id="speed">54</span> KM/H</div></div>
+<div class="screen" id="loading"><h1>CITY RUSH</h1><p>Загрузка неонового города…</p><div id="status"></div></div>
+<div class="screen hidden" id="start"><h1>CITY RUSH</h1><p>НЕОНОВЫЙ ТОКИО<br>← → или A / D — смена полосы<br>Пробел / ↑ — прыжок<br>На телефоне — свайпы</p><button id="startBtn">ИГРАТЬ</button><div id="modelStatus" style="margin-top:15px;font-size:13px"></div></div>
+<div class="screen hidden" id="over"><h1>GAME OVER</h1><p>Счёт: <b id="finalScore">0</b><br>Монеты: <b id="finalCoins">0</b></p><button id="restartBtn">ЕЩЁ РАЗ</button></div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
-</body>
-</html>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+const $=id=>document.getElementById(id);
+let scene,camera,renderer,clock,player,mixer=null,baseY=0,state='loading';
+let speed=15,distance=0,score=0,coins=0,lane=0,vy=0,jumping=false,nextZ=-60;
+const laneWidth=3.5,segments=[],obstacles=[],tokens=[];
+const roadMat=new THREE.MeshStandardMaterial({color:0x171729,metalness:.4,roughness:.6});
+const pink=new THREE.MeshBasicMaterial({color:0xff00e5});
+const cyan=new THREE.MeshBasicMaterial({color:0x00eeff});
+const gold=new THREE.MeshStandardMaterial({color:0xffc500,emissive:0x8a4b00,metalness:.8,roughness:.2});
+const hazard=new THREE.MeshStandardMaterial({color:0xff2255,emissive:0x770022});
+const geoRoad=new THREE.PlaneGeometry(12,20);
+const geoDash=new THREE.PlaneGeometry(.12,2.5);
+const geoCoin=new THREE.TorusGeometry(.4,.13,8,16);
+function mesh(g,m,x,y,z,parent=scene){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);parent.add(o);return o}
+function segment(z){
+ const g=new THREE.Group();g.position.z=z;scene.add(g);segments.push(g);
+ const road=mesh(geoRoad,roadMat,0,0,0,g);road.rotation.x=-Math.PI/2;
+ for(let x of [-laneWidth/2,laneWidth/2])for(let k=-8;k<=8;k+=5){let d=mesh(geoDash,pink,x,.025,k,g);d.rotation.x=-Math.PI/2}
+ for(let side of [-1,1]){
+  mesh(new THREE.BoxGeometry(.25,.3,20),cyan,side*6.15,.15,0,g);
+  const w=4+Math.random()*4,h=9+Math.random()*23;
+  mesh(new THREE.BoxGeometry(w,h,8),new THREE.MeshStandardMaterial({color:0x151527}),side*(8+w/2),h/2,0,g);
+  for(let row=2;row<h-1;row+=2.6)for(let col=-2.5;col<=2.5;col+=2.5){
+   let win=mesh(new THREE.BoxGeometry(.12,.7,1),Math.random()>.5?pink:cyan,side*(8+.12),row,col,g);
+  }
+ }
+}
+function spawn(z){
+ const blocked=Math.floor(Math.random()*3)-1;
+ const low=Math.random()>.5;
+ const o=mesh(new THREE.BoxGeometry(2.4,low?.8:2.5,.7),hazard,blocked*laneWidth,low?.4:1.25,z);
+ obstacles.push({o,low});
+ for(let l=-1;l<=1;l++)if(l!==blocked){
+  for(let offset of [-3,0,3]){
+   const c=mesh(geoCoin,gold,l*laneWidth,1,z+offset);tokens.push(c);
+  }
+ }
+}
+function fallback(){
+ const g=new THREE.Group();
+ const body=mesh(new THREE.CapsuleGeometry(.42,1.05,5,10),new THREE.MeshStandardMaterial({color:0x00ccff,emissive:0x003366}),0,1.05,0,g);
+ mesh(new THREE.SphereGeometry(.28,12,10),new THREE.MeshStandardMaterial({color:0xffd4aa}),0,2.05,0,g);
+ return g;
+}
+async function loadPlayer(){
+ try{
+  const gltf=await new Promise((resolve,reject)=>new GLTFLoader().load('./player_game.glb',resolve,undefined,reject));
+  player=gltf.scene;
+  const box=new THREE.Box3().setFromObject(player),size=box.getSize(new THREE.Vector3());
+  if(!Number.isFinite(size.y)||size.y<=0)throw Error('Некорректный размер GLB');
+  player.scale.setScalar(2.2/size.y);
+  player.updateMatrixWorld(true);
+  const adjusted=new THREE.Box3().setFromObject(player);
+  player.position.y=-adjusted.min.y;baseY=player.position.y;
+  if(gltf.animations.length){
+   mixer=new THREE.AnimationMixer(player);
+   const clip=gltf.animations.find(a=>/run|walk/i.test(a.name))||gltf.animations[0];
+   mixer.clipAction(clip).play();
+  }
+  $('modelStatus').textContent='3D-модель загружена ✓';
+ }catch(e){
+  console.warn('GLB не загружен, используем встроенного персонажа:',e);
+  player=fallback();baseY=0;
+  $('modelStatus').textContent='Используется встроенный персонаж. Для своей модели положи player_game.glb рядом с index.html';
+ }
+ player.rotation.y=Math.PI;
+ scene.add(player);
+}
+function init(){
+ scene=new THREE.Scene();scene.background=new THREE.Color(0x09091b);scene.fog=new THREE.Fog(0x09091b,22,85);
+ camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,130);camera.position.set(0,4,8);
+ renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);$('game').appendChild(renderer.domElement);
+ scene.add(new THREE.HemisphereLight(0x99aaff,0x181020,2.3));
+ const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(5,12,8);scene.add(light);
+ clock=new THREE.Clock();
+ window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+ window.addEventListener('keydown',key);
+ let sx=0,sy=0;
+ window.addEventListener('touchstart',e=>{sx=e.changedTouches[0].clientX;sy=e.changedTouches[0].clientY},{passive:true});
+ window.addEventListener('touchend',e=>{if(state!=='playing')return;const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>30&&Math.abs(dx)>Math.abs(dy))lane=THREE.MathUtils.clamp(lane+Math.sign(dx),-1,1);else if(dy< -25||Math.abs(dx)<12&&Math.abs(dy)<12)jump()},{passive:true});
+ $('startBtn').onclick=reset;$('restartBtn').onclick=reset;
+ loadPlayer().then(()=>{for(let i=0;i<7;i++)segment(-i*20);$('loading').classList.add('hidden');$('start').classList.remove('hidden');state='start'}).catch(e=>{$('status').textContent=e.message});
+ animate();
+}
+function jump(){if(state==='playing'&&!jumping){jumping=true;vy=12}}
+function key(e){
+ if(['Space','ArrowUp','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+ if(state==='start'||state==='over'){if(['Space','Enter'].includes(e.code))reset();return}
+ if(state!=='playing')return;
+ if(['ArrowLeft','KeyA'].includes(e.code)&&!e.repeat)lane=Math.max(-1,lane-1);
+ if(['ArrowRight','KeyD'].includes(e.code)&&!e.repeat)lane=Math.min(1,lane+1);
+ if(['Space','ArrowUp','KeyW'].includes(e.code))jump();
+}
+function clear(arr,getObject){for(const item of arr)scene.remove(getObject(item));arr.length=0}
+function reset(){
+ clear(segments,x=>x);clear(obstacles,x=>x.o);clear(tokens,x=>x);
+ speed=15;distance=0;score=0;coins=0;lane=0;vy=0;jumping=false;nextZ=-60;
+ player.position.set(0,baseY,0);player.rotation.set(0,Math.PI,0);player.visible=true;
+ camera.position.set(0,4,8);
+ for(let i=0;i<7;i++)segment(-i*20);
+ for(let z=-35;z>=-95;z-=20)spawn(z);
+ nextZ=-115;
+ $('start').classList.add('hidden');$('over').classList.add('hidden');$('hud').style.display='flex';state='playing';
+ clock.getDelta();
+}
+function end(){
+ state='over';player.visible=false;$('hud').style.display='none';
+ $('finalScore').textContent=score;$('finalCoins').textContent=coins;$('over').classList.remove('hidden');
+}
+function update(dt){
+ if(state!=='playing')return;
+ speed=Math.min(40,speed+.5*dt);distance+=speed*dt;score=Math.floor(distance+coins*50);
+ player.position.z-=speed*dt;
+ player.position.x=THREE.MathUtils.damp(player.position.x,lane*laneWidth,13,dt);
+ if(jumping){vy-=30*dt;player.position.y+=vy*dt;if(player.position.y<=baseY){player.position.y=baseY;vy=0;jumping=false}}
+ if(mixer)mixer.update(dt);
+ camera.position.x=THREE.MathUtils.damp(camera.position.x,player.position.x*.45,5,dt);
+ camera.position.y=THREE.MathUtils.damp(camera.position.y,player.position.y+3.8,5,dt);
+ camera.position.z=player.position.z+8;
+ camera.lookAt(player.position.x*.5,player.position.y+1.1,player.position.z-9);
+ while(nextZ>player.position.z-115){segment(nextZ);spawn(nextZ-7);nextZ-=20}
+ for(let i=segments.length-1;i>=0;i--)if(segments[i].position.z>player.position.z+25){scene.remove(segments[i]);segments.splice(i,1)}
+ // Надёжные коллизии по игровым координатам, не зависят от формы GLB.
+ for(let i=obstacles.length-1;i>=0;i--){
+  const {o,low}=obstacles[i];
+  if(o.position.z>player.position.z+12){scene.remove(o);obstacles.splice(i,1);continue}
+  if(Math.abs(o.position.z-player.position.z)<.65&&Math.abs(o.position.x-player.position.x)<1.25&&(!low||player.position.y-baseY<.85)){end();return}
+ }
+ for(let i=tokens.length-1;i>=0;i--){
+  const c=tokens[i];c.rotation.y+=dt*4;
+  if(c.position.z>player.position.z+12){scene.remove(c);tokens.splice(i,1);continue}
+  if(Math.abs(c.position.z-player.position.z)<.85&&Math.abs(c.position.x-player.position.x)<1&&Math.abs((player.position.y-baseY))<1.4){coins++;scene.remove(c);tokens.splice(i,1)}
+ }
+ $('score').textContent=score;$('coins').textContent=coins;$('speed').textContent=Math.floor(speed*3.6);
+}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);update(dt);renderer.render(scene,camera)}
+init();
+</script></body></html>
